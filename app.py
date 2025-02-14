@@ -32,6 +32,10 @@ def connect():
     terminalSerObj, ports = sdec.command_list[userCommand](userArgs, terminalSerObj)
     return
 
+# TODO: Impl comports -d (Disconnect active port)
+#       Impl "ping"       : commands.ping
+
+
 @app.route("/")
 def default():
     return "Hello, welcome to SDEC-API app"
