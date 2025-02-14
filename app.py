@@ -9,22 +9,32 @@ import math
 from flask import Flask
 
 # Setup path
-sys.path.insert(0, './plumbing')
 sys.path.insert(0, './sdec')
 
 # SDEC
 import sdec
-import commands
-import hw_commands
-import sensor_conv
-import engineController
 
 app = Flask(__name__)
 
-@app.route("/")
-def hello():
-    return "Hello, World!"
+@app.route("/comports-l")
+def comports():
+    terminalSerObj = sdec.terminalData()
+    userCommand = "comports"
+    userArgs = ["-l"]
+    terminalSerObj, ports = sdec.command_list[userCommand](userArgs, terminalSerObj)
+    return ports
 
+@app.route("/connect-p")
+def connect():
+    terminalSerObj = sdec.terminalData()
+    userCommand = "connect"
+    userArgs = ["-p","/dev/ttyUSB0"]
+    terminalSerObj, ports = sdec.command_list[userCommand](userArgs, terminalSerObj)
+    return
+
+@app.route("/")
+def default():
+    return "Hello, welcome to SDEC-API app"
 
 if __name__ == '__main__':
 
