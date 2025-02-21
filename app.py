@@ -7,7 +7,7 @@ import math
 
 # save this as app.py
 from flask import Flask
-
+from flask_cors import CORS
 # Setup path
 sys.path.insert(0, './sdec')
 
@@ -15,6 +15,7 @@ sys.path.insert(0, './sdec')
 import sdec
 
 app = Flask(__name__)
+CORS(app)
 
 @app.route("/comports-l")
 def comports():
