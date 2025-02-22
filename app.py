@@ -6,7 +6,7 @@ import datetime
 import math
 
 # save this as app.py
-from flask import Flask
+from flask import Flask, request
 from flask_cors import CORS
 # Setup path
 sys.path.insert(0, './sdec')
@@ -17,7 +17,7 @@ import sdec
 app = Flask(__name__)
 CORS(app)
 
-@app.route("/comports-l")
+@app.route("/comports-l", methods=['GET'])
 def comports():
     terminalSerObj = sdec.terminalData()
     userCommand = "comports"
@@ -25,13 +25,16 @@ def comports():
     terminalSerObj, ports = sdec.command_list[userCommand](userArgs, terminalSerObj)
     return ports
 
-@app.route("/connect-p")
+@app.route("/connect-p", methods=['POST'])
 def connect():
-    terminalSerObj = sdec.terminalData()
-    userCommand = "connect"
-    userArgs = ["-p","/dev/ttyUSB0"]
-    terminalSerObj, ports = sdec.command_list[userCommand](userArgs, terminalSerObj)
-    return
+    if request.method == "POST":
+        com_port = request.get_json()["comport"]
+        terminalSerObj = sdec.terminalData()
+        userCommand = "connect"
+        userArgs = ["-p",com_port]
+        terminalSerObj, status = sdec.command_list[userCommand](userArgs, terminalSerObj)
+        return status
+    return "invalid"
 
 # TODO: Impl comports -d (Disconnect active port)
 #       Impl "ping"       : commands.ping
