@@ -25,14 +25,6 @@ def ping():
     terminalSerObj, response = sdec.command_list[userCommand](userArgs, terminalSerObj)
     return response
 
-@app.route("/ping")
-def ping():
-    terminalSerObj = sdec.terminalData()
-    userCommand = "ping"
-    userArgs = ["-t"]
-    terminalSerObj, response = sdec.command_list[userCommand](userArgs, terminalSerObj)
-    return response
-
 @app.route("/comports-l", methods=['GET'])
 def comports():
     terminalSerObj = sdec.terminalData()
@@ -41,7 +33,7 @@ def comports():
     terminalSerObj, ports = sdec.command_list[userCommand](userArgs, terminalSerObj)
     return ports
 
-@app.route("/comports-d")
+@app.route("/comports-d", methods=['GET'])
 def comports_disconnect():
     terminalSerObj = sdec.terminalData()
     userCommand = "comports"
