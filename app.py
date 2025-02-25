@@ -17,6 +17,22 @@ import sdec
 app = Flask(__name__)
 CORS(app)
 
+@app.route("/ping")
+def ping():
+    terminalSerObj = sdec.terminalData()
+    userCommand = "ping"
+    userArgs = ["-t"]
+    terminalSerObj, response = sdec.command_list[userCommand](userArgs, terminalSerObj)
+    return response
+
+@app.route("/ping")
+def ping():
+    terminalSerObj = sdec.terminalData()
+    userCommand = "ping"
+    userArgs = ["-t"]
+    terminalSerObj, response = sdec.command_list[userCommand](userArgs, terminalSerObj)
+    return response
+
 @app.route("/comports-l", methods=['GET'])
 def comports():
     terminalSerObj = sdec.terminalData()
@@ -24,6 +40,14 @@ def comports():
     userArgs = ["-l"]
     terminalSerObj, ports = sdec.command_list[userCommand](userArgs, terminalSerObj)
     return ports
+
+@app.route("/comports-d")
+def comports_disconnect():
+    terminalSerObj = sdec.terminalData()
+    userCommand = "comports"
+    userArgs = ["-d"]
+    terminalSerObj, confirmation = sdec.command_list[userCommand](userArgs, terminalSerObj)
+    return confirmation
 
 @app.route("/connect-p", methods=['POST'])
 def connect():
@@ -35,10 +59,6 @@ def connect():
         terminalSerObj, status = sdec.command_list[userCommand](userArgs, terminalSerObj)
         return status
     return "invalid"
-
-# TODO: Impl comports -d (Disconnect active port)
-#       Impl "ping"       : commands.ping
-
 
 @app.route("/")
 def default():
