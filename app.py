@@ -17,25 +17,35 @@ import sdec
 app = Flask(__name__)
 CORS(app)
 
+terminalSerObj = sdec.terminalData()
+
 @app.route("/comports-l", methods=['GET'])
 def comports():
-    terminalSerObj = sdec.terminalData()
+    global terminalSerObj
     userCommand = "comports"
     userArgs = ["-l"]
+    print(terminalSerObj)
     terminalSerObj, ports = sdec.command_list[userCommand](userArgs, terminalSerObj)
     return ports
 
 @app.route("/connect-p", methods=['POST'])
 def connect():
     if request.method == "POST":
+        global terminalSerObj
         com_port = request.get_json()["comport"]
-        terminalSerObj = sdec.terminalData()
         userCommand = "connect"
         userArgs = ["-p",com_port]
         terminalSerObj, status = sdec.command_list[userCommand](userArgs, terminalSerObj)
         return status
     return "invalid"
 
+@app.route("/data-dump", methods=['GET'])
+def sensor_dump():
+    global terminalSerObj
+    userCommand = "sensor"
+    userArgs = ["dump"]
+    terminalSerObj, sensor_data_dict = sdec.command_list[userCommand](userArgs, terminalSerObj)
+    return sensor_data_dict
 # TODO: Impl comports -d (Disconnect active port)
 #       Impl "ping"       : commands.ping
 
