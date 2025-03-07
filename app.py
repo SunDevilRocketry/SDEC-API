@@ -16,6 +16,10 @@ sys.path.insert(0, './sdec')
 # SDEC
 import sdec
 
+from sdec import sdec
+
+terminalSerObj = sdec.terminalData()
+
 app = Flask(__name__)
 CORS(app)
 
