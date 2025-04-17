@@ -90,6 +90,14 @@ def sensor_poll():
     time = int(request.args.get('time', 100)) # Defaults to 100 sensor-dumps
     return Response(sensor_poll_dump(time), mimetype='text/event-stream')
 
+@app.route("/get-flash-config", methods=['GET'])
+def get_flash_config_data():
+    global terminalSerObj
+    userCommand = "read-preset"
+    userArgs = [""]
+    terminalSerObj, data = sdec.command_list[userCommand](userArgs, terminalSerObj)
+    return jsonify(data)
+
 @app.route("/")
 def default():
     return "Hello, welcome to SDEC-API app"
