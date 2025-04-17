@@ -8,15 +8,13 @@ import math
 import json
 
 # save this as app.py
-from flask import Flask, request, Response
+from flask import Flask, request, Response, jsonify
 from flask_cors import CORS
 # Setup path
 sys.path.insert(0, './sdec')
 
 # SDEC
 import sdec
-
-from sdec import sdec
 
 terminalSerObj = sdec.terminalData()
 
@@ -68,7 +66,12 @@ def sensor_dump():
     userCommand = "sensor"
     userArgs = ["dump"]
     terminalSerObj, data_dump = sdec.command_list[userCommand](userArgs, terminalSerObj)
-    return data_dump
+    
+    for key in data_dump:
+        if math.isinf(data_dump[key]):
+            data_dump[key] = 999999
+
+    return jsonify(data_dump)
 
 def sensor_poll_dump(dumps):
     global terminalSerObj
