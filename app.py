@@ -68,7 +68,11 @@ def sensor_dump():
     userCommand = "sensor"
     userArgs = ["dump"]
     terminalSerObj, data_dump = sdec.command_list[userCommand](userArgs, terminalSerObj)
-    if (math.isinf(data_dump["bvelo"])): data_dump["bvelo"] = 999999999
+    
+    for key in data_dump:
+        if math.isinf(data_dump[key]):
+            data_dump[key] = 999999
+
     return jsonify(data_dump)
 
 def sensor_poll_dump(dumps):
@@ -88,13 +92,13 @@ def sensor_poll():
     time = int(request.args.get('time', 100)) # Defaults to 100 sensor-dumps
     return Response(sensor_poll_dump(time), mimetype='text/event-stream')
 
-@app.route("/sensor-get", methods=['Get'])
-def sensor_get():
+@app.route("/get-flash-config", methods=['GET'])
+def get_flash_config_data():
     global terminalSerObj
-    userCommand = "sensor"
-    userArgs = ["dump"]
-    terminalSerObj, sensor_data = sdec.command_list[userCommand](userArgs, terminalSerObj)
-    return sensor_data
+    userCommand = "read-preset"
+    userArgs = [""]
+    terminalSerObj, data = sdec.command_list[userCommand](userArgs, terminalSerObj)
+    return jsonify(data)
 
 @app.route("/")
 def default():
