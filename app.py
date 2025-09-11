@@ -16,14 +16,11 @@ sys.path.insert(0, './sdec')
 # SDEC
 import sdec
 
-#from sdec import sdec
-
 terminalSerObj = sdec.terminalData()
 
 app = Flask(__name__)
 CORS(app)
 
-# Global terminalSerObj
 terminalSerObj = sdec.terminalData()
 is_polling = False
 
