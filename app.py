@@ -21,15 +21,15 @@ terminalSerObj = sdec.terminalData()
 app = Flask(__name__)
 CORS(app)
 
-# sensor dump thread data
+# Globals for sensor dump
 is_polling = False
-latest_data_dump = {}
+latest_data_dump = None
 polling_thread = None
 poll_interval = 0  # seconds, adjust as needed
 request_timeout = 5 # seconds before timeout
 
 # --------------------------------------------------------------------
-# Sensor Poll Thread
+# Sensor Dump Thread
 # --------------------------------------------------------------------
 def poll_sensor_data():
     """Continuously run 'sensor dump' command and cache the result."""
@@ -48,6 +48,10 @@ def poll_sensor_data():
         except Exception as e:
             print(f"[poll_sensor_data] Error: {e}")
         time.sleep(poll_interval)
+
+# --------------------------------------------------------------------
+# Flask API Routes
+# --------------------------------------------------------------------
 
 @app.route("/ping")
 def ping():
@@ -102,6 +106,13 @@ def sensor_dump():
         # else continue trying until timeout
         if latest_data_dump:
             return jsonify(latest_data_dump)
+        
+@app.route("/sensor-dump-stop", methods=['GET'])
+def stop_sensor_dump():
+    global is_polling
+    is_polling = False
+    polling_thread.join()
+    return "Dump Stopped."
         
 
 def sensor_poll_dump(dumps):
