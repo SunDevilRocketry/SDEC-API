@@ -21,8 +21,33 @@ terminalSerObj = sdec.terminalData()
 app = Flask(__name__)
 CORS(app)
 
-terminalSerObj = sdec.terminalData()
+# sensor dump thread data
 is_polling = False
+latest_data_dump = {}
+polling_thread = None
+poll_interval = 0  # seconds, adjust as needed
+request_timeout = 5 # seconds before timeout
+
+# --------------------------------------------------------------------
+# Sensor Poll Thread
+# --------------------------------------------------------------------
+def poll_sensor_data():
+    """Continuously run 'sensor dump' command and cache the result."""
+    global terminalSerObj, latest_data_dump, is_polling
+    userCommand = "sensor"
+    userArgs = ["dump"]
+
+    while is_polling:
+        try:
+            terminalSerObj, data_dump = sdec.command_list[userCommand](userArgs, terminalSerObj)
+            # sanitize invalid values
+            for key in data_dump:
+                if math.isinf(data_dump[key]):
+                    data_dump[key] = 999999
+            latest_data_dump = data_dump
+        except Exception as e:
+            print(f"[poll_sensor_data] Error: {e}")
+        time.sleep(poll_interval)
 
 @app.route("/ping")
 def ping():
@@ -61,16 +86,23 @@ def connect():
 
 @app.route("/sensor-dump", methods=['GET'])
 def sensor_dump():
-    global terminalSerObj
-    userCommand = "sensor"
-    userArgs = ["dump"]
-    terminalSerObj, data_dump = sdec.command_list[userCommand](userArgs, terminalSerObj)
-    
-    for key in data_dump:
-        if math.isinf(data_dump[key]):
-            data_dump[key] = 999999
+    global terminalSerObj, latest_data_dump, is_polling, polling_thread, request_timeout
 
-    return jsonify(data_dump)
+    start_time = time.time
+
+    # Start polling thread on first call
+    if not is_polling:
+        is_polling = True
+        polling_thread = threading.Thread(target=poll_sensor_data, daemon=True)
+        polling_thread.start()
+        print("[sensor-dump] Started background polling thread")
+
+    while (time.time - start_time) <= request_timeout:
+        # Return latest cached data if exists
+        # else continue trying until timeout
+        if latest_data_dump:
+            return jsonify(latest_data_dump)
+        
 
 def sensor_poll_dump(dumps):
     global terminalSerObj
