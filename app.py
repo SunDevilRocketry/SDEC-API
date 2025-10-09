@@ -25,7 +25,7 @@ CORS(app)
 is_polling = False
 latest_data_dump = None
 polling_thread = None
-poll_interval = 0  # seconds, adjust as needed
+poll_interval = 0.1  # seconds, adjust as needed
 request_timeout = 5 # seconds before timeout
 
 # --------------------------------------------------------------------
@@ -92,7 +92,7 @@ def connect():
 def sensor_dump():
     global terminalSerObj, latest_data_dump, is_polling, polling_thread, request_timeout
 
-    start_time = time.time
+    start_time = time.time()
 
     # Start polling thread on first call
     if not is_polling:
@@ -101,11 +101,12 @@ def sensor_dump():
         polling_thread.start()
         print("[sensor-dump] Started background polling thread")
 
-    while (time.time - start_time) <= request_timeout:
+    while ((time.time() - start_time) <= request_timeout):
         # Return latest cached data if exists
         # else continue trying until timeout
-        if latest_data_dump:
+        if latest_data_dump is not None:
             return jsonify(latest_data_dump)
+    return jsonify({"message": "No response returned in the specified period."}), 500
         
 @app.route("/sensor-dump-stop", methods=['GET'])
 def stop_sensor_dump():
