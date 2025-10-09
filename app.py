@@ -27,6 +27,7 @@ latest_data_dump = None
 polling_thread = None
 poll_interval = 0.1  # seconds, adjust as needed
 request_timeout = 5 # seconds before timeout
+busy_wait_break = 0.05 # seconds between response tries
 
 # --------------------------------------------------------------------
 # Sensor Dump Thread
@@ -90,7 +91,7 @@ def connect():
 
 @app.route("/sensor-dump", methods=['GET'])
 def sensor_dump():
-    global terminalSerObj, latest_data_dump, is_polling, polling_thread, request_timeout
+    global terminalSerObj, latest_data_dump, is_polling, polling_thread, request_timeout, busy_wait_break
 
     start_time = time.time()
 
@@ -106,6 +107,7 @@ def sensor_dump():
         # else continue trying until timeout
         if latest_data_dump is not None:
             return jsonify(latest_data_dump)
+        time.sleep(busy_wait_break)
     return jsonify({"message": "No response returned in the specified period."}), 500
         
 @app.route("/sensor-dump-stop", methods=['GET'])
