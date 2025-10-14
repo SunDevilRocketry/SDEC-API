@@ -25,9 +25,9 @@ CORS(app)
 is_polling = False
 latest_data_dump = None
 polling_thread = None
-poll_interval = 0.1  # seconds, adjust as needed
+poll_interval = 0.01  # seconds, adjust as needed
 request_timeout = 5 # seconds before timeout
-busy_wait_break = 0.05 # seconds between response tries
+busy_wait_break = 0.03 # seconds between response tries
 
 # --------------------------------------------------------------------
 # Sensor Dump Thread
@@ -35,19 +35,27 @@ busy_wait_break = 0.05 # seconds between response tries
 def poll_sensor_data():
     """Continuously run 'sensor dump' command and cache the result."""
     global terminalSerObj, latest_data_dump, is_polling
-    userCommand = "sensor"
-    userArgs = ["dump"]
+
+    if terminalSerObj.firmware == 'APPA':
+        userCommand = "dashboard-dump"
+        userArgs = []
+    else:
+        userCommand = "sensor"
+        userArgs = ["dump"]
 
     while is_polling:
         try:
+            start_time = time.time()
             terminalSerObj, data_dump = sdec.command_list[userCommand](userArgs, terminalSerObj)
             # sanitize invalid values
             for key in data_dump:
                 if math.isinf(data_dump[key]):
                     data_dump[key] = 999999
             latest_data_dump = data_dump
+            print( time.time() - start_time )
         except Exception as e:
             print(f"[poll_sensor_data] Error: {e}")
+            is_polling = False
         time.sleep(poll_interval)
 
 # --------------------------------------------------------------------
