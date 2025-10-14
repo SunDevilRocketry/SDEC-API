@@ -52,7 +52,6 @@ def poll_sensor_data():
                 if math.isinf(data_dump[key]):
                     data_dump[key] = 999999
             latest_data_dump = data_dump
-            print( time.time() - start_time )
         except Exception as e:
             print(f"[poll_sensor_data] Error: {e}")
             is_polling = False
