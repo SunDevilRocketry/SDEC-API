@@ -25,7 +25,7 @@ CORS(app)
 is_polling = False
 latest_data_dump = None
 polling_thread = None
-poll_interval = 0.01  # seconds, adjust as needed
+poll_interval = 0.01666666  # seconds, adjust as needed
 request_timeout = 5 # seconds before timeout
 busy_wait_break = 0.03 # seconds between response tries
 
@@ -44,8 +44,8 @@ def poll_sensor_data():
         userArgs = ["dump"]
 
     while is_polling:
+        start_time = time.time()
         try:
-            start_time = time.time()
             terminalSerObj, data_dump = sdec.command_list[userCommand](userArgs, terminalSerObj)
             # sanitize invalid values
             for key in data_dump:
@@ -56,7 +56,8 @@ def poll_sensor_data():
         except Exception as e:
             print(f"[poll_sensor_data] Error: {e}")
             is_polling = False
-        time.sleep(poll_interval)
+        elapsed_time = time.time() - start_time # print this value for debugging
+        time.sleep( max( poll_interval - elapsed_time, 0 ) ) # sleep if not reached interval yet
 
 # --------------------------------------------------------------------
 # Flask API Routes
