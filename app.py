@@ -6,6 +6,7 @@ import sys
 import datetime
 import math
 import json
+import asyncio
 
 # save this as app.py
 from flask import Flask, request, Response, jsonify
@@ -15,6 +16,7 @@ sys.path.insert(0, './sdec')
 
 # SDEC
 import sdec
+import ws
 
 terminalSerObj = sdec.terminalData()
 
@@ -157,6 +159,11 @@ def default():
 
 if __name__ == '__main__':
 
+    # Start asyncio loop in a separate thread
+    t = threading.Thread(target=ws.ws_main, daemon=True)
+    t.start()
+
+    # Start Flask server in main thread
     # run() method of Flask class runs the application 
     # on the local development server.
     app.run()
