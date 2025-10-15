@@ -25,9 +25,9 @@ CORS(app)
 is_polling = False
 latest_data_dump = None
 polling_thread = None
-poll_interval = 0.1  # seconds, adjust as needed
+poll_interval = 0.01666666  # seconds, adjust as needed
 request_timeout = 5 # seconds before timeout
-busy_wait_break = 0.05 # seconds between response tries
+busy_wait_break = 0.03 # seconds between response tries
 
 # --------------------------------------------------------------------
 # Sensor Dump Thread
@@ -35,10 +35,16 @@ busy_wait_break = 0.05 # seconds between response tries
 def poll_sensor_data():
     """Continuously run 'sensor dump' command and cache the result."""
     global terminalSerObj, latest_data_dump, is_polling
-    userCommand = "sensor"
-    userArgs = ["dump"]
+
+    if terminalSerObj.firmware == 'APPA':
+        userCommand = "dashboard-dump"
+        userArgs = []
+    else:
+        userCommand = "sensor"
+        userArgs = ["dump"]
 
     while is_polling:
+        start_time = time.time()
         try:
             terminalSerObj, data_dump = sdec.command_list[userCommand](userArgs, terminalSerObj)
             # sanitize invalid values
@@ -48,7 +54,9 @@ def poll_sensor_data():
             latest_data_dump = data_dump
         except Exception as e:
             print(f"[poll_sensor_data] Error: {e}")
-        time.sleep(poll_interval)
+            is_polling = False
+        elapsed_time = time.time() - start_time # print this value for debugging
+        time.sleep( max( poll_interval - elapsed_time, 0 ) ) # sleep if not reached interval yet
 
 # --------------------------------------------------------------------
 # Flask API Routes
