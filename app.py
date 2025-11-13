@@ -97,6 +97,11 @@ def connect():
         return status
     return "invalid"
 
+# Dummy route for now
+@app.route("/wireless-stats", methods=['GET'])
+def wireless_stats():
+    return jsonify({"target": "Flight Computer Rev. 2 (A0002-R2)"},{"firmware": "APPA"},{"latency":80},{"sig_strength":-15},{"status":"OK"})
+
 @app.route("/sensor-dump", methods=['GET'])
 def sensor_dump():
     global terminalSerObj, latest_data_dump, is_polling, polling_thread, request_timeout, busy_wait_break
