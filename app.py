@@ -105,14 +105,17 @@ def connect():
 # Dummy route for now
 @app.route("/wireless-stats", methods=['GET'])
 def wireless_stats():
-    return jsonify(sdec.dashboard.vehicle_id)
+    if terminalSerObj and terminalSerObj.firmware == 'Receiver':
+        return jsonify(sdec.dashboard.vehicle_id)
+    else:
+        return Response("No wireless target available.", status=204)
 
 @app.route("/next-msg", methods=['GET'])
 def next_msg():
     try:
         return jsonify(sdec.dashboard.get_next_msg())
     except queue.Empty:
-        return Response("No messages in queue.", status=204)
+        return Response(status=204)
 
 @app.route("/sensor-dump", methods=['GET'])
 def sensor_dump():
