@@ -6,6 +6,8 @@ import sys
 import datetime
 import math
 import json
+import traceback
+import queue
 
 # save this as app.py
 from flask import Flask, request, Response, jsonify
@@ -23,9 +25,10 @@ CORS(app)
 
 # Globals for sensor dump
 is_polling = False
-latest_data_dump = None
 polling_thread = None
-poll_interval = 0.01666666  # seconds, adjust as needed
+usb_poll_interval = 0.01666666  # seconds, adjust as needed
+wireless_poll_interval = 0.1 # seconds, adjust as needed
+poll_interval = 0
 request_timeout = 5 # seconds before timeout
 busy_wait_break = 0.03 # seconds between response tries
 
@@ -39,21 +42,23 @@ def poll_sensor_data():
     if terminalSerObj.firmware == 'APPA':
         userCommand = "dashboard-dump"
         userArgs = []
+        poll_interval = usb_poll_interval
+    elif terminalSerObj.firmware == 'Receiver':
+        userCommand = "lora-recieve-next"
+        userArgs = []
+        throwaway = None
+        poll_interval = wireless_poll_interval
     else:
-        userCommand = "sensor"
-        userArgs = ["dump"]
+        print("Unsupported Firmware!")
+        is_polling = False
 
     while is_polling:
         start_time = time.time()
         try:
-            terminalSerObj, data_dump = sdec.command_list[userCommand](userArgs, terminalSerObj)
-            # sanitize invalid values
-            for key in data_dump:
-                if math.isinf(data_dump[key]):
-                    data_dump[key] = 999999
-            latest_data_dump = data_dump
+            terminalSerObj, outcome = sdec.command_list[userCommand](userArgs, terminalSerObj)
         except Exception as e:
             print(f"[poll_sensor_data] Error: {e}")
+            traceback.print_exc()
             is_polling = False
         elapsed_time = time.time() - start_time # print this value for debugging
         time.sleep( max( poll_interval - elapsed_time, 0 ) ) # sleep if not reached interval yet
@@ -100,7 +105,17 @@ def connect():
 # Dummy route for now
 @app.route("/wireless-stats", methods=['GET'])
 def wireless_stats():
-    return jsonify({"target": "Flight Computer Rev. 2 (A0002-R2)"},{"firmware": "APPA"},{"latency":80},{"sig_strength":-15},{"status":"OK"})
+    if terminalSerObj and terminalSerObj.firmware == 'Receiver':
+        return jsonify(sdec.dashboard.vehicle_id)
+    else:
+        return Response("No wireless target available.", status=204)
+
+@app.route("/next-msg", methods=['GET'])
+def next_msg():
+    try:
+        return jsonify(sdec.dashboard.get_next_msg())
+    except queue.Empty:
+        return Response(status=204)
 
 @app.route("/sensor-dump", methods=['GET'])
 def sensor_dump():
@@ -118,8 +133,8 @@ def sensor_dump():
     while ((time.time() - start_time) <= request_timeout):
         # Return latest cached data if exists
         # else continue trying until timeout
-        if latest_data_dump is not None:
-            return jsonify(latest_data_dump)
+        if sdec.dashboard.latest_data_dump is not None:
+            return jsonify(sdec.dashboard.latest_data_dump)
         time.sleep(busy_wait_break)
     return jsonify({"message": "No response returned in the specified period."}), 500
         
