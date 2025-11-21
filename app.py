@@ -99,6 +99,13 @@ def connect():
         userCommand = "connect"
         userArgs = ["-p",com_port]
         terminalSerObj, status = sdec.command_list[userCommand](userArgs, terminalSerObj)
+
+        # Check if GS connected
+        if terminalSerObj.firmware == 'Receiver':
+            # Run telem setting upload command
+            userCommand = "telem"
+            userArgs = ["upload", "sdec/input/telem.cfg"]
+            terminalSerObj, _ = sdec.command_list[userCommand](userArgs, terminalSerObj)
         return status
     return "invalid"
 
