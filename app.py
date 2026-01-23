@@ -6,6 +6,7 @@ import atexit
 from flask import Flask, request, Response
 from flask_cors import CORS
 from hardware import serial, sensor_sentry, serial_lock
+from serial import SerialException
 from typing import List
 
 # BaseController
@@ -30,6 +31,40 @@ def ping():
             return "Ping response received"
         else:
             return "Ping failed"
+        
+@app.route("/comports")
+def comports():
+    return serial.available_comports()
+        
+@app.route("/connect", methods=["POST"])
+def connect():
+    data = request.get_json(silent=True)
+    if not data: return "Missing POST JSON data"
+
+    name = data.get("comport")
+    timeout = data.get("timeout", 5)
+
+    if not name: return "Missing 'comport' field"
+
+    try:
+        timeout = int(timeout)
+    except (TypeError, ValueError):
+        return "Invalid timeout value"
+    
+    try:
+        serial.init_comport(name=name, baudrate=921600, timeout=timeout)
+
+        if not serial.open_comport(): return "Failed to open comport"
+
+        return "Connected"
+    
+    except SerialException as e:
+        return "Serial connection error"
+    
+@app.route("/disconnect")
+def disconnect():
+    if not serial.close_comport(): return "Failed to close comport"
+    return "Disconnected"
     
 @app.route("/sensor-dump")
 def sensor_dump():
@@ -66,7 +101,7 @@ def sensor_poll():
 
 @app.route("/")
 def default():
-    return "Hello, welcome to the SDECv2-API"
+    return "Hello, welcome to the SDECv2 API"
 
 @atexit.register
 def shutdown():

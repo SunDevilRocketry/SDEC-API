@@ -27,8 +27,6 @@ for sensor in sensors: sensor_sentry.add_sensor(sensor)
 
 # Serial connection 
 serial = SerialObj()
-serial.init_comport(name="COM3", baudrate=921600, timeout=5)
-serial.open_comport() # TODO consider moving to an api call
 
 def serial_lock():
     return _serial_lock
