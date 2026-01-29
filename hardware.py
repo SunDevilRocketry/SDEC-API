@@ -26,7 +26,7 @@ sensor_sentry = SensorSentry()
 for sensor in sensors: sensor_sentry.add_sensor(sensor)
 
 # Serial connection 
-serial = SerialObj()
+serial_connection = SerialObj()
 
 def serial_lock():
     return _serial_lock

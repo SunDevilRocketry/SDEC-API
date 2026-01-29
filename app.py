@@ -3,11 +3,12 @@
 
 import atexit
 
-from flask import Flask, request, Response
+from flask import Flask, request, Response, jsonify
 from flask_cors import CORS
-from hardware import serial, sensor_sentry, serial_lock
+from hardware import serial_connection, sensor_sentry, serial_lock
 from serial import SerialException
 from typing import List
+from util import make_safe_number
 
 # BaseController
 from sdecv2 import Firmware
@@ -24,8 +25,8 @@ CORS(app)
 @app.route("/ping")
 def ping():
     with serial_lock():
-        serial.send(b"\x01")
-        data = serial.read()
+        serial_connection.send(b"\x01")
+        data = serial_connection.read()
 
         if data == b"\x05":
             return "Ping response received"
@@ -34,7 +35,7 @@ def ping():
         
 @app.route("/comports")
 def comports():
-    return serial.available_comports()
+    return serial_connection.available_comports()
         
 @app.route("/connect", methods=["POST"])
 def connect():
@@ -52,9 +53,9 @@ def connect():
         return "Invalid timeout value"
     
     try:
-        serial.init_comport(name=name, baudrate=921600, timeout=timeout)
+        serial_connection.init_comport(name=name, baudrate=921600, timeout=timeout)
 
-        if not serial.open_comport(): return "Failed to open comport"
+        if not serial_connection.open_comport(): return "Failed to open comport"
 
         return "Connected"
     
@@ -63,20 +64,23 @@ def connect():
     
 @app.route("/disconnect")
 def disconnect():
-    if not serial.close_comport(): return "Failed to close comport"
+    if not serial_connection.close_comport(): return "Failed to close comport"
     return "Disconnected"
     
 @app.route("/sensor-dump")
 def sensor_dump():
     with serial_lock():
-        sensor_dump = sensor_sentry.dump(serial)
+        sensor_dump = sensor_sentry.dump(serial_connection)
 
-    lines = []
+    data_dict = {}
     for sensor, readout in sensor_dump.items():
-        val = readout if readout is not None else 0.0
-        lines.append(f"{sensor.name}: {val:.2f} {sensor.unit}\n")
+        val = make_safe_number(readout)
+        data_dict[sensor.name] = {
+            "value": val,
+            "unit": sensor.unit
+        }
 
-    return "\n".join(lines)
+    return jsonify(data_dict)
 
 @app.route("/sensor-poll")
 def sensor_poll():
@@ -86,11 +90,11 @@ def sensor_poll():
     def do_poll():
         with serial_lock():
             if polls: 
-                iterator = sensor_sentry.poll(serial, count=polls)
+                iterator = sensor_sentry.poll(serial_connection, count=polls)
             elif time:
-                iterator = sensor_sentry.poll(serial, timeout=time)
+                iterator = sensor_sentry.poll(serial_connection, timeout=time)
             else:
-                iterator = sensor_sentry.poll(serial, count=10) # No given values defaults to 10 polls
+                iterator = sensor_sentry.poll(serial_connection, count=10) # No given values defaults to 10 polls
 
             for poll in iterator:
                 for sensor, readout in poll.items():
@@ -105,7 +109,7 @@ def default():
 
 @atexit.register
 def shutdown():
-    serial.close_comport()
+    serial_connection.close_comport()
 
 if __name__ == "__main__":
     app.run()
