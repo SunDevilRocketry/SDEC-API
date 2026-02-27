@@ -24,10 +24,11 @@ from SDECv2 import create_sensors
 app = Flask(__name__)
 CORS(app)
 
-data_dict: Dict[str, str] = {}
+data_dict = {}
 stop_event = threading.Event()
-stop_event.set()
-dashboard_dump_thread = threading.Thread(poll_dashboard_dump, args=(serial_connection, data_dict, stop_event))
+dashboard_dump_thread = threading.Thread(target=poll_dashboard_dump, 
+                                         args=(serial_connection, data_dict, stop_event), 
+                                         daemon=True)
 
 @app.route("/ping")
 def ping():
@@ -82,24 +83,27 @@ def wireless_stats():
     else:
         return Response("No wireless target available.", status=204)
     
-@app.route("/dashboard-dump")
+@app.route("/dashboard-dump", methods=["GET", "POST"])
 def dashboard_dump():
-    data = request.get_json(silent=True)
-    if not data: return "Missing POST JSON data"
+    if request.method == "GET":
+        return data_dict
+    
+    elif request.method == "POST":
+        data = request.get_json(silent=True)
+        if not data: return "Missing POST JSON data"
 
-    if request.method == "POST":
         start = data.get("start")
         stop = data.get("stop")
 
+        if bool(start) == bool(stop): return "Only start or stop can be set"
+
         if start:
             stop_event.clear()
-            return "Started"
+            dashboard_dump_thread.start()
+            return "dashboard-dump poll started"
         elif stop:
             stop_event.set()
-            return "Stopped"
-
-    elif request.method == "GET":
-        return data_dict
+            return "dashboard-dump poll stopped"
     
     return "Invalid Method"
     
@@ -145,7 +149,10 @@ def default():
 
 @atexit.register
 def shutdown():
-    serial_connection.close_comport()
+    try: serial_connection.close_comport()
+    except: pass
+    stop_event.set()
+    if dashboard_dump_thread.is_alive(): dashboard_dump_thread.join()
 
 if __name__ == "__main__":
     app.run()

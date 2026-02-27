@@ -8,16 +8,20 @@ from util import make_safe_number
 
 POLL_INTERVAL = 0.1 # In seconds
 
-def poll_dashboard_dump(serial_connection: SerialObj, data_dict: Dict[str, str], stop_event: threading.Event):
+def poll_dashboard_dump(serial_connection: SerialObj, data_dict, stop_event: threading.Event):
     while not stop_event.is_set():
         with serial_lock():
-            sensor_dump = SensorSentry.dashboard_dump(serial_connection)
+            dashboard_dump = SensorSentry.dashboard_dump(serial_connection)
 
-        for sensor, readout in sensor_dump.items():
+        curr_dashboard_dump = {}
+        for sensor, readout in dashboard_dump.items():
             val = make_safe_number(readout)
-            data_dict[sensor.name] = {
+            curr_dashboard_dump[sensor.name] = {
                 "value": val,
                 "unit": sensor.unit
             }
 
-        time.sleep(1)
+        data_dict.clear()
+        data_dict.update(curr_dashboard_dump)
+
+        time.sleep(POLL_INTERVAL)
