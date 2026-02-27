@@ -2,25 +2,32 @@
 # Copyright (c) 2025 Sun Devil Rocketry
 
 import atexit
+import threading
 
 from flask import Flask, request, Response, jsonify
 from flask_cors import CORS
-from hardware import serial_connection, sensor_sentry, serial_lock
+from hardware import serial_connection, sensor_sentry, serial_lock, firmware # Objects from hardware.py
 from serial import SerialException
-from typing import List
+from threads import poll_dashboard_dump
+from typing import List, Dict
 from util import make_safe_number
 
 # BaseController
-from sdecv2 import Firmware
+from SDECv2 import Firmware
 # SerialController
-from sdecv2 import SerialObj
+from SDECv2 import SerialObj
 # Sensor
-from sdecv2 import SensorSentry
+from SDECv2 import SensorSentry
 # Sensor utility
-from sdecv2 import create_sensors
+from SDECv2 import create_sensors
 
 app = Flask(__name__)
 CORS(app)
+
+data_dict: Dict[str, str] = {}
+stop_event = threading.Event()
+stop_event.set()
+dashboard_dump_thread = threading.Thread(poll_dashboard_dump, args=(serial_connection, data_dict, stop_event))
 
 @app.route("/ping")
 def ping():
@@ -66,6 +73,35 @@ def connect():
 def disconnect():
     if not serial_connection.close_comport(): return "Failed to close comport"
     return "Disconnected"
+
+# Stub, will be implemented for SDEC v2.1.0
+@app.route("/wireless-stats")
+def wireless_stats():
+    if firmware.name == "Receiver":
+        return jsonify(firmware.id)
+    else:
+        return Response("No wireless target available.", status=204)
+    
+@app.route("/dashboard-dump")
+def dashboard_dump():
+    data = request.get_json(silent=True)
+    if not data: return "Missing POST JSON data"
+
+    if request.method == "POST":
+        start = data.get("start")
+        stop = data.get("stop")
+
+        if start:
+            stop_event.clear()
+            return "Started"
+        elif stop:
+            stop_event.set()
+            return "Stopped"
+
+    elif request.method == "GET":
+        return data_dict
+    
+    return "Invalid Method"
     
 @app.route("/sensor-dump")
 def sensor_dump():
@@ -80,7 +116,7 @@ def sensor_dump():
             "unit": sensor.unit
         }
 
-    return jsonify(data_dict)
+    return data_dict
 
 @app.route("/sensor-poll")
 def sensor_poll():

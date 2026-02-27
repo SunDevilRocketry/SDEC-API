@@ -1,13 +1,13 @@
 import threading
 
 # BaseController
-from sdecv2 import Firmware
+from SDECv2 import Firmware
 # SerialController
-from sdecv2 import SerialObj
+from SDECv2 import SerialObj
 # Sensor
-from sdecv2 import SensorSentry
+from SDECv2 import SensorSentry
 # Sensor utility
-from sdecv2 import create_sensors
+from SDECv2 import create_sensors
 
 # Serial connection lock
 _serial_lock = threading.Lock()
