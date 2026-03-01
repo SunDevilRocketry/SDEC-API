@@ -24,6 +24,7 @@ from SDECv2 import create_sensors
 app = Flask(__name__)
 CORS(app)
 
+# Globals for polling dashboard dump
 data_dict = {}
 stop_event = threading.Event()
 dashboard_dump_thread = threading.Thread(target=poll_dashboard_dump, 

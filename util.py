@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025 Sun Devil Rocketry
+
 import math
 
 def make_safe_number(num: float | int | None) -> float | int | None:
