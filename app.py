@@ -66,7 +66,13 @@ def connect():
 
         if not serial_connection.open_comport(): return "Failed to open comport"
 
-        return "Connected"
+        return jsonify({
+            "controller": {
+                "firmware": int.from_bytes(firmware.id, "big"),
+                "name": firmware.name
+            },
+            "status": "connected"
+        })
     
     except SerialException as e:
         return "Serial connection error"
@@ -80,7 +86,15 @@ def disconnect():
 @app.route("/wireless-stats")
 def wireless_stats():
     if firmware.name == "Receiver":
-        return jsonify(firmware.id)
+        return jsonify(
+            {
+                "target": firmware.name,
+                "firmware": int.from_bytes(firmware.id, "big"),
+                "latency": 0,
+                "sig_strength": 0,
+                "status": "OK"
+            }
+        )
     else:
         return Response("No wireless target available.", status=204)
     
@@ -116,10 +130,7 @@ def sensor_dump():
     data_dict = {}
     for sensor, readout in sensor_dump.items():
         val = make_safe_number(readout)
-        data_dict[sensor.name] = {
-            "value": val,
-            "unit": sensor.unit
-        }
+        data_dict[sensor.short_name] = val
 
     return data_dict
 
