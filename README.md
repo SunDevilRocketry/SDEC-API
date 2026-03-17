@@ -1,3 +1,7 @@
 # SDEC-API
 
-An backend application that provides an API endpoint for each SDEC functions.
+A backend application that provides an API endpoint for each SDEC functions.
+
+To run:
+- pip install -e ./SDECv2
+- python app.py

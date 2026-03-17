@@ -1,185 +1,170 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2025 Sun Devil Rocketry
 
-# General
+import atexit
 import threading
-import time
-import os
-import sys
-import datetime
-import math
-import json
-import traceback
-import queue
 
-# save this as app.py
 from flask import Flask, request, Response, jsonify
 from flask_cors import CORS
-# Setup path
-sys.path.insert(0, './sdec')
+from hardware import serial_connection, sensor_sentry, serial_lock, firmware # Objects from hardware.py
+from serial import SerialException
+from threads import poll_dashboard_dump
+from typing import List, Dict
+from util import make_safe_number
 
-# SDEC
-import sdec
-
-terminalSerObj = sdec.terminalData()
+# BaseController
+from SDECv2 import Firmware
+# SerialController
+from SDECv2 import SerialObj
+# Sensor
+from SDECv2 import SensorSentry
+# Sensor utility
+from SDECv2 import create_sensors
 
 app = Flask(__name__)
 CORS(app)
 
-# Globals for sensor dump
-is_polling = False
-polling_thread = None
-usb_poll_interval = 0.01666666  # seconds, adjust as needed
-wireless_poll_interval = 0.1 # seconds, adjust as needed
-poll_interval = 0
-request_timeout = 5 # seconds before timeout
-busy_wait_break = 0.03 # seconds between response tries
-
-# --------------------------------------------------------------------
-# Sensor Dump Thread
-# --------------------------------------------------------------------
-def poll_sensor_data():
-    """Continuously run 'sensor dump' command and cache the result."""
-    global terminalSerObj, latest_data_dump, is_polling
-
-    if terminalSerObj.firmware == 'APPA':
-        userCommand = "dashboard-dump"
-        userArgs = []
-        poll_interval = usb_poll_interval
-    elif terminalSerObj.firmware == 'Receiver':
-        userCommand = "lora-recieve-next"
-        userArgs = []
-        throwaway = None
-        poll_interval = wireless_poll_interval
-    else:
-        print("Unsupported Firmware!")
-        is_polling = False
-
-    while is_polling:
-        start_time = time.time()
-        try:
-            terminalSerObj, outcome = sdec.command_list[userCommand](userArgs, terminalSerObj)
-        except Exception as e:
-            print(f"[poll_sensor_data] Error: {e}")
-            traceback.print_exc()
-            is_polling = False
-        elapsed_time = time.time() - start_time # print this value for debugging
-        time.sleep( max( poll_interval - elapsed_time, 0 ) ) # sleep if not reached interval yet
-
-# --------------------------------------------------------------------
-# Flask API Routes
-# --------------------------------------------------------------------
+# Globals for polling dashboard dump
+data_dict = {}
+stop_event = threading.Event()
+dashboard_dump_thread = threading.Thread(target=poll_dashboard_dump, 
+                                         args=(serial_connection, data_dict, stop_event), 
+                                         daemon=True)
 
 @app.route("/ping")
 def ping():
-    global terminalSerObj
-    userCommand = "ping"
-    userArgs = ["-t"]
-    terminalSerObj, response = sdec.command_list[userCommand](userArgs, terminalSerObj)
-    return response
+    with serial_lock():
+        serial_connection.send(b"\x01")
+        data = serial_connection.read()
 
-@app.route("/comports-l", methods=['GET'])
+        if data == b"\x05":
+            return "Ping response received"
+        else:
+            return "Ping failed"
+        
+@app.route("/comports")
 def comports():
-    global terminalSerObj
-    userCommand = "comports"
-    userArgs = ["-l"]
-    terminalSerObj, ports = sdec.command_list[userCommand](userArgs, terminalSerObj)
-    return ports
-
-@app.route("/comports-d", methods=['GET'])
-def comports_disconnect():
-    global terminalSerObj
-    userCommand = "comports"
-    userArgs = ["-d"]
-    terminalSerObj, confirmation = sdec.command_list[userCommand](userArgs, terminalSerObj)
-    return confirmation
-
-@app.route("/connect-p", methods=['POST'])
+    return serial_connection.available_comports()
+        
+@app.route("/connect", methods=["POST"])
 def connect():
-    if request.method == "POST":
-        global terminalSerObj
-        com_port = request.get_json()["comport"]
-        userCommand = "connect"
-        userArgs = ["-p",com_port]
-        terminalSerObj, status = sdec.command_list[userCommand](userArgs, terminalSerObj)
-        return status
-    return "invalid"
+    data = request.get_json(silent=True)
+    if not data: return "Missing POST JSON data"
 
-# Dummy route for now
-@app.route("/wireless-stats", methods=['GET'])
+    name = data.get("comport")
+    timeout = data.get("timeout", 5)
+
+    if not name: return "Missing 'comport' field"
+
+    try:
+        timeout = int(timeout)
+    except (TypeError, ValueError):
+        return "Invalid timeout value"
+    
+    try:
+        serial_connection.init_comport(name=name, baudrate=921600, timeout=timeout)
+
+        if not serial_connection.open_comport(): return "Failed to open comport"
+
+        return jsonify({
+            "controller": {
+                "firmware": int.from_bytes(firmware.id, "big"),
+                "name": firmware.name
+            },
+            "status": "connected"
+        })
+    
+    except SerialException as e:
+        return "Serial connection error"
+    
+@app.route("/disconnect")
+def disconnect():
+    if not serial_connection.close_comport(): return "Failed to close comport"
+    return "Disconnected"
+
+# Stub, will be implemented for SDEC v2.1.0
+@app.route("/wireless-stats")
 def wireless_stats():
-    if terminalSerObj and terminalSerObj.firmware == 'Receiver':
-        return jsonify(sdec.dashboard.vehicle_id)
+    if firmware.name == "Receiver":
+        return jsonify(
+            {
+                "target": firmware.name,
+                "firmware": int.from_bytes(firmware.id, "big"),
+                "latency": 0,
+                "sig_strength": 0,
+                "status": "OK"
+            }
+        )
     else:
         return Response("No wireless target available.", status=204)
+    
+@app.route("/dashboard-dump", methods=["GET", "POST"])
+def dashboard_dump():
+    if request.method == "GET":
+        return data_dict
+    
+    elif request.method == "POST":
+        data = request.get_json(silent=True)
+        if not data: return "Missing POST JSON data"
 
-@app.route("/next-msg", methods=['GET'])
-def next_msg():
-    try:
-        return jsonify(sdec.dashboard.get_next_msg())
-    except queue.Empty:
-        return Response(status=204)
+        start = data.get("start")
+        stop = data.get("stop")
 
-@app.route("/sensor-dump", methods=['GET'])
+        if bool(start) == bool(stop): return "Only start or stop can be set"
+
+        if start:
+            stop_event.clear()
+            dashboard_dump_thread.start()
+            return "dashboard-dump poll started"
+        elif stop:
+            stop_event.set()
+            return "dashboard-dump poll stopped"
+    
+    return "Invalid Method"
+    
+@app.route("/sensor-dump")
 def sensor_dump():
-    global terminalSerObj, latest_data_dump, is_polling, polling_thread, request_timeout, busy_wait_break
+    with serial_lock():
+        sensor_dump = sensor_sentry.dump(serial_connection)
 
-    start_time = time.time()
+    data_dict = {}
+    for sensor, readout in sensor_dump.items():
+        val = make_safe_number(readout)
+        data_dict[sensor.short_name] = val
 
-    # Start polling thread on first call
-    if not is_polling:
-        is_polling = True
-        polling_thread = threading.Thread(target=poll_sensor_data, daemon=True)
-        polling_thread.start()
-        print("[sensor-dump] Started background polling thread")
+    return data_dict
 
-    while ((time.time() - start_time) <= request_timeout):
-        # Return latest cached data if exists
-        # else continue trying until timeout
-        if sdec.dashboard.latest_data_dump is not None:
-            return jsonify(sdec.dashboard.latest_data_dump)
-        time.sleep(busy_wait_break)
-    return jsonify({"message": "No response returned in the specified period."}), 500
-        
-@app.route("/sensor-dump-stop", methods=['GET'])
-def stop_sensor_dump():
-    global is_polling
-    is_polling = False
-    polling_thread.join()
-    return "Dump Stopped."
-        
-
-def sensor_poll_dump(dumps):
-    global terminalSerObj
-    userCommand = "sensor"
-    userArgs = ["dump"]
-
-    for i in range(0, dumps):
-        terminalSerObj, data_dump = sdec.command_list[userCommand](userArgs, terminalSerObj)
-        print("yield: {0}".format(i + 1))
-        yield f"data: {json.dumps(data_dump)}\n\n"
-        time.sleep(0.1)
-
-@app.route("/sensor-poll", methods=['GET'])
+@app.route("/sensor-poll")
 def sensor_poll():
-    # \?time=<time>
-    time = int(request.args.get('time', 100)) # Defaults to 100 sensor-dumps
-    return Response(sensor_poll_dump(time), mimetype='text/event-stream')
+    polls = int(request.args.get("count", 0)) # Poll count takes priority
+    time = int(request.args.get("time", 0))
 
-@app.route("/get-flash-config", methods=['GET'])
-def get_flash_config_data():
-    global terminalSerObj
-    userCommand = "read-preset"
-    userArgs = [""]
-    terminalSerObj, data = sdec.command_list[userCommand](userArgs, terminalSerObj)
-    return jsonify(data)
+    def do_poll():
+        with serial_lock():
+            if polls: 
+                iterator = sensor_sentry.poll(serial_connection, count=polls)
+            elif time:
+                iterator = sensor_sentry.poll(serial_connection, timeout=time)
+            else:
+                iterator = sensor_sentry.poll(serial_connection, count=10) # No given values defaults to 10 polls
+
+            for poll in iterator:
+                for sensor, readout in poll.items():
+                    val = readout if readout is not None else 0.0
+                    yield f"{sensor.name}: {val:.2f} {sensor.unit}"
+
+    return Response(do_poll(), mimetype="text/plain")
 
 @app.route("/")
 def default():
-    return "Hello, welcome to SDEC-API app"
+    return "Hello, welcome to the SDECv2 API"
 
-if __name__ == '__main__':
+@atexit.register
+def shutdown():
+    try: serial_connection.close_comport()
+    except: pass
+    stop_event.set()
+    if dashboard_dump_thread.is_alive(): dashboard_dump_thread.join()
 
-    # run() method of Flask class runs the application 
-    # on the local development server.
+if __name__ == "__main__":
     app.run()
