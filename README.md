@@ -2,6 +2,12 @@
 
 A backend application that provides an API endpoint for each SDEC functions.
 
-To run:
+Before running:
 - pip install -e ./SDECv2
-- python app.py
+```
+{
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/SDECv2"
+  ]
+}
+```
