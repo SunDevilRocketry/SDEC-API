@@ -13,7 +13,7 @@ from typing import List, Dict
 from util import make_safe_number
 
 # BaseController
-from SDECv2 import Firmware
+from SDECv2 import BaseController, Controller, Firmware
 # SerialController
 from SDECv2 import SerialObj
 # Sensor
@@ -66,10 +66,21 @@ def connect():
 
         if not serial_connection.open_comport(): return "Failed to open comport"
 
+        # send connect opcode
+        serial_connection.send(b'\x02')
+
+        # retrieve opcodes
+        hw = serial_connection.read(1)
+        fw = serial_connection.read(1)
+        
+        target = BaseController(create_controller(hw), create_firmware(fw))
+
+        serial_connection.target = target
+
         return jsonify({
             "controller": {
-                "firmware": int.from_bytes(firmware.id, "big"),
-                "name": firmware.name
+                "firmware": target.firmware.name,
+                "name": target.controller.name
             },
             "status": "connected"
         })
