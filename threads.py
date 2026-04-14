@@ -18,7 +18,12 @@ def poll_dashboard_dump(serial_connection: SerialObj, stop_event: threading.Even
         next_time += POLL_INTERVAL
 
         with serial_lock():
-            telemetry_obj.dashboard_dump(serial_connection)
+            try:
+                serial_connection.reset_input_buffer()
+                telemetry_obj.dashboard_dump(serial_connection)
+            except ValueError: # Serial returned bad values
+                print("Warning: The telemetry thread received an error. Attempting to recover, but this may not work.")
+                serial_connection.reset_input_buffer()
 
         sleep_time = next_time - time.perf_counter()
         if sleep_time > 0: 

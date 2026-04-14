@@ -30,7 +30,7 @@ CORS(app)
 stop_event = threading.Event()
 telemetry_obj = Telemetry()
 dashboard_dump_thread = threading.Thread(target=poll_dashboard_dump, 
-                                         args=(serial_connection, telemetry_obj, stop_event), 
+                                         args=(serial_connection, stop_event, telemetry_obj), 
                                          daemon=True)
 
 @app.route("/ping")
