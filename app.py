@@ -71,6 +71,9 @@ def connect():
         # send connect opcode
         serial_connection.connect()
 
+        if( serial_connection.target is None ):
+            return Response("Serial connection failed.", status=400)
+
         return jsonify({
             "controller": {
                 "firmware": serial_connection.target.firmware.name,
@@ -90,7 +93,9 @@ def disconnect():
 # Stub, will be implemented for SDEC v2.1.0
 @app.route("/wireless-stats")
 def wireless_stats():
-    if firmware.name == "Receiver":
+    if serial_connection.target is None:
+        return Response("Not connected to a target.", status=400)
+    elif serial_connection.target.firmware.id == b'\x11':
         return telemetry_obj.get_latest_wireless_stats()
     else:
         return Response("No wireless target available.", status=204)
