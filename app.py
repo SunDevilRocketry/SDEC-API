@@ -83,7 +83,7 @@ def connect():
         })
     
     except SerialException as e:
-        return "Serial connection error"
+        return Response("Serial connection error", status=400)
     
 @app.route("/disconnect")
 def disconnect():
