@@ -13,11 +13,13 @@ from typing import List, Dict
 from util import make_safe_number
 
 # BaseController
-from SDECv2 import Firmware
+from SDECv2 import BaseController, Controller, Firmware, create_controllers, create_firmwares
 # SerialController
 from SDECv2 import SerialObj
 # Sensor
 from SDECv2 import SensorSentry
+# Parser
+from SDECv2 import Telemetry
 # Sensor utility
 from SDECv2 import create_sensors
 
@@ -25,10 +27,10 @@ app = Flask(__name__)
 CORS(app)
 
 # Globals for polling dashboard dump
-data_dict = {}
 stop_event = threading.Event()
+telemetry_obj = Telemetry()
 dashboard_dump_thread = threading.Thread(target=poll_dashboard_dump, 
-                                         args=(serial_connection, data_dict, stop_event), 
+                                         args=(serial_connection, stop_event, telemetry_obj), 
                                          daemon=True)
 
 @app.route("/ping")
@@ -37,7 +39,7 @@ def ping():
         serial_connection.send(b"\x01")
         data = serial_connection.read()
 
-        if data == b"\x05":
+        if data == b"\x05" or data == b'\x10': #should not hardcode
             return "Ping response received"
         else:
             return "Ping failed"
@@ -66,16 +68,22 @@ def connect():
 
         if not serial_connection.open_comport(): return "Failed to open comport"
 
+        # send connect opcode
+        serial_connection.connect()
+
+        if( serial_connection.target is None ):
+            return Response("Serial connection failed.", status=400)
+
         return jsonify({
             "controller": {
-                "firmware": int.from_bytes(firmware.id, "big"),
-                "name": firmware.name
+                "firmware": serial_connection.target.firmware.name,
+                "name": serial_connection.target.controller.name
             },
             "status": "connected"
         })
     
     except SerialException as e:
-        return "Serial connection error"
+        return Response("Serial connection error", status=400)
     
 @app.route("/disconnect")
 def disconnect():
@@ -85,23 +93,17 @@ def disconnect():
 # Stub, will be implemented for SDEC v2.1.0
 @app.route("/wireless-stats")
 def wireless_stats():
-    if firmware.name == "Receiver":
-        return jsonify(
-            {
-                "target": firmware.name,
-                "firmware": int.from_bytes(firmware.id, "big"),
-                "latency": 0,
-                "sig_strength": 0,
-                "status": "OK"
-            }
-        )
+    if serial_connection.target is None:
+        return Response("Not connected to a target.", status=400)
+    elif serial_connection.target.firmware.id == b'\x11':
+        return telemetry_obj.get_latest_wireless_stats()
     else:
         return Response("No wireless target available.", status=204)
     
 @app.route("/dashboard-dump", methods=["GET", "POST"])
 def dashboard_dump():
     if request.method == "GET":
-        return data_dict
+        return jsonify(telemetry_obj.get_latest_dashboard_dump())
     
     elif request.method == "POST":
         data = request.get_json(silent=True)
