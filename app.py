@@ -50,6 +50,8 @@ def comports():
         
 @app.route("/connect", methods=["POST"])
 def connect():
+    # Set up handling for request
+    connected = False
     data = request.get_json(silent=True)
     if not data: return "Missing POST JSON data"
 
@@ -63,17 +65,31 @@ def connect():
     except (TypeError, ValueError):
         return "Invalid timeout value"
     
-    try:
-        serial_connection.init_comport(name=name, baudrate=921600, timeout=timeout)
+    # Check for an existing connection
+    if serial_connection.target is not None:
+        connected = True
+    
+    # Initialize a new connection if one does not exist
+    if not connected:
+        try:
+            with serial_lock():
+                serial_connection.init_comport(name=name, baudrate=921600, timeout=timeout)
 
-        if not serial_connection.open_comport(): return "Failed to open comport"
+                if not serial_connection.open_comport(): return "Failed to open comport"
 
-        # send connect opcode
-        serial_connection.connect()
+                # send connect opcode
+                serial_connection.connect()
 
-        if( serial_connection.target is None ):
-            return Response("Serial connection failed.", status=400)
-
+                if( serial_connection.target is None ):
+                    return Response("Serial connection failed.", status=400)
+                else:
+                    connected = True
+        
+        except SerialException as e:
+            return Response("Serial connection error", status=400)
+    
+    # Return connection status
+    if connected and serial_connection.target is not None:
         return jsonify({
             "controller": {
                 "firmware": serial_connection.target.firmware.name,
@@ -81,14 +97,14 @@ def connect():
             },
             "status": "connected"
         })
-    
-    except SerialException as e:
-        return Response("Serial connection error", status=400)
+    else: # Shouldn't get here -- protective case
+        return Response("Serial connection failed (server-side error).", status=500)
     
 @app.route("/disconnect")
 def disconnect():
-    if not serial_connection.close_comport(): return "Failed to close comport"
-    return "Disconnected"
+    with serial_lock():
+        if not serial_connection.close_comport(): return "Failed to close comport"
+        return "Disconnected"
 
 # Stub, will be implemented for SDEC v2.1.0
 @app.route("/wireless-stats")
