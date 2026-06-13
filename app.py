@@ -40,9 +40,9 @@ def ping():
         data = serial_connection.read()
 
         if data == b"\x05" or data == b'\x10': #should not hardcode
-            return "Ping response received"
+            return Response("Ping response received", status=200)
         else:
-            return "Ping failed"
+            return Response("Ping failed", status=400)
         
 @app.route("/comports")
 def comports():
@@ -74,7 +74,7 @@ def connect():
             else:
                 serial_connection.init_comport(name=name, baudrate=921600, timeout=timeout)
 
-                if not serial_connection.open_comport(): return "Failed to open comport"
+                if not serial_connection.open_comport(): return Response("Failed to open comport", status=400)
 
                 # send connect opcode
                 serial_connection.connect()
@@ -101,8 +101,8 @@ def connect():
 @app.route("/disconnect")
 def disconnect():
     with serial_lock():
-        if not serial_connection.close_comport(): return "Failed to close comport"
-        return "Disconnected"
+        if not serial_connection.close_comport(): return Response("Failed to close comport", status=400)
+        return Response("Disconnected", status=200)
 
 @app.route("/wireless-stats")
 def wireless_stats():
@@ -120,7 +120,7 @@ def dashboard_dump():
     
     elif request.method == "POST":
         data = request.get_json(silent=True)
-        if not data: return "Missing POST JSON data"
+        if not data: return Response("Missing POST JSON data", status=400)
 
         start = data.get("start")
         stop = data.get("stop")
