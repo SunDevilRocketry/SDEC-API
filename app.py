@@ -53,26 +53,25 @@ def connect():
     # Set up handling for request
     connected = False
     data = request.get_json(silent=True)
-    if not data: return "Missing POST JSON data"
+    if not data: return Response("Missing POST JSON data", status=400)
 
     name = data.get("comport")
     timeout = data.get("timeout", 5)
 
-    if not name: return "Missing 'comport' field"
+    if not name: return Response("Missing 'comport' field", status=400)
 
     try:
         timeout = int(timeout)
     except (TypeError, ValueError):
-        return "Invalid timeout value"
-    
-    # Check for an existing connection
-    if serial_connection.target is not None:
-        connected = True
+        return Response("Invalid timeout value", status=400)
     
     # Initialize a new connection if one does not exist
-    if not connected:
-        try:
-            with serial_lock():
+    try:
+        with serial_lock():
+            # This check can cause a race condition. It needs to be in the lock.
+            if serial_connection.target is not None:
+                connected = True
+            else:
                 serial_connection.init_comport(name=name, baudrate=921600, timeout=timeout)
 
                 if not serial_connection.open_comport(): return "Failed to open comport"
@@ -84,9 +83,8 @@ def connect():
                     return Response("Serial connection failed.", status=400)
                 else:
                     connected = True
-        
-        except SerialException as e:
-            return Response("Serial connection error", status=400)
+    except SerialException as e:
+        return Response("Serial connection error", status=400)
     
     # Return connection status
     if connected and serial_connection.target is not None:
@@ -133,7 +131,13 @@ def dashboard_dump():
             if dashboard_dump_thread.is_alive(): # Protective case
                 return Response("Polling was already running", status=200)
             else:
+                global dashboard_dump_thread
                 stop_event.clear()
+                dashboard_dump_thread = threading.Thread(
+                    target=poll_dashboard_dump,
+                    args=(serial_connection, stop_event, telemetry_obj),
+                    daemon=True
+                )
                 dashboard_dump_thread.start()
                 return Response("Dashboard-dump poll started", status=200)
         elif stop:
