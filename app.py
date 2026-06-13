@@ -106,7 +106,6 @@ def disconnect():
         if not serial_connection.close_comport(): return "Failed to close comport"
         return "Disconnected"
 
-# Stub, will be implemented for SDEC v2.1.0
 @app.route("/wireless-stats")
 def wireless_stats():
     if serial_connection.target is None:
@@ -128,17 +127,23 @@ def dashboard_dump():
         start = data.get("start")
         stop = data.get("stop")
 
-        if bool(start) == bool(stop): return "Only start or stop can be set"
+        if bool(start) == bool(stop): return Response("Only start XOR stop can be set", status=400)
 
         if start:
-            stop_event.clear()
-            dashboard_dump_thread.start()
-            return "dashboard-dump poll started"
+            if dashboard_dump_thread.is_alive(): # Protective case
+                return Response("Polling was already running", status=204)
+            else:
+                stop_event.clear()
+                dashboard_dump_thread.start()
+                return Response("Dashboard-dump poll started", status=200)
         elif stop:
-            stop_event.set()
-            return "dashboard-dump poll stopped"
+            if not dashboard_dump_thread.is_alive(): # Protective case
+                return Response("Polling was already stopped", status=204)
+            else:
+                stop_event.set()
+                return Response("Dashboard-dump poll stopped", status=200)
     
-    return "Invalid Method"
+    return Response("Invalid condition", status=400)
     
 @app.route("/sensor-dump")
 def sensor_dump():
