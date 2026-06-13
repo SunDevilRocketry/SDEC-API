@@ -131,14 +131,14 @@ def dashboard_dump():
 
         if start:
             if dashboard_dump_thread.is_alive(): # Protective case
-                return Response("Polling was already running", status=204)
+                return Response("Polling was already running", status=200)
             else:
                 stop_event.clear()
                 dashboard_dump_thread.start()
                 return Response("Dashboard-dump poll started", status=200)
         elif stop:
             if not dashboard_dump_thread.is_alive(): # Protective case
-                return Response("Polling was already stopped", status=204)
+                return Response("Polling was already stopped", status=200)
             else:
                 stop_event.set()
                 return Response("Dashboard-dump poll stopped", status=200)
