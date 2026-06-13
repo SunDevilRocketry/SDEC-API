@@ -29,9 +29,11 @@ CORS(app)
 # Globals for polling dashboard dump
 stop_event = threading.Event()
 telemetry_obj = Telemetry()
-dashboard_dump_thread = threading.Thread(target=poll_dashboard_dump, 
-                                         args=(serial_connection, stop_event, telemetry_obj), 
-                                         daemon=True)
+dashboard_dump_thread = threading.Thread(
+    target=poll_dashboard_dump,
+    args=(serial_connection, stop_event, telemetry_obj),
+    daemon=True
+)
 
 @app.route("/ping")
 def ping():
@@ -115,6 +117,7 @@ def wireless_stats():
     
 @app.route("/dashboard-dump", methods=["GET", "POST"])
 def dashboard_dump():
+    global dashboard_dump_thread
     if request.method == "GET":
         return jsonify(telemetry_obj.get_latest_dashboard_dump())
     
@@ -131,7 +134,6 @@ def dashboard_dump():
             if dashboard_dump_thread.is_alive(): # Protective case
                 return Response("Polling was already running", status=200)
             else:
-                global dashboard_dump_thread
                 stop_event.clear()
                 dashboard_dump_thread = threading.Thread(
                     target=poll_dashboard_dump,
