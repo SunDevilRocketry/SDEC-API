@@ -160,8 +160,11 @@ def sensor_poll():
 
 @app.route("/preset", methods=["GET", "POST"])
 def preset():
-    if serial_connection.target.controller.id != b"\x05": # Check if FC
-            return Response("The device is not a flight computer!", 400)
+    if serial_connection.target is None:
+        return Response("No device connected!", 400)
+    elif serial_connection.target.controller.id != b"\x05": # Check if FC
+        return Response("The device is not a flight computer!", 400)
+
     try:
         if request.method == "GET": # DOWNLOAD
             with serial_lock():
