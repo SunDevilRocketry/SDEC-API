@@ -51,7 +51,6 @@ def comports():
             comports = serial_connection.available_comports()
 
         if comports:
-            print(str(comports))
             return jsonify(comports), 200
         else:
             return Response("No ports present.", 204)
