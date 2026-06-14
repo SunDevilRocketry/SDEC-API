@@ -171,25 +171,28 @@ def preset():
                     preset_data=None
                 )
                 appa_parser.download_preset(serial_connection, path="SDECv2/a_output/temp_download.json")
-                downloaded_preset = json.load("SDECv2/a_output/temp_download.json")
-                return Response(downloaded_preset, 200)
+                with open("SDECv2/a_output/temp_download.json", "r") as f:
+                    downloaded_preset = json.load(f)
+                return Response(json.dumps(downloaded_preset, sort_keys=False), 200, mimetype="application/json")
         
         elif request.method == "POST": # UPLOAD
+            content = json.loads(request.data.decode("utf-8"))
+            if not content:
+                return Response("You must POST a json.", 400)
+            
             with serial_lock():
-                content = request.json
-
-                if not content:
-                    return Response("You must POST a json.", 400)
                 
                 appa_preset_config = create_configs.appa_preset_config()
                 appa_parser = Parser(
                     preset_config=appa_preset_config,
                     preset_data=None
                 )
-                json.dump("SDECv2/a_input/temp_upload.json")
+                with open("SDECv2/a_input/temp_upload.json", "w") as f:
+                    json.dump(content, f)
                 appa_parser.upload_preset(serial_connection, path="SDECv2/a_input/temp_upload.json")
-        
-        return Response("Invalid Method", 400)
+
+                return Response("Successful upload!", 200)
+
     except Exception as e:
         return Response(str(e), 500)
 
