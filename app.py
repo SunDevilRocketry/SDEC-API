@@ -46,7 +46,31 @@ def ping():
         
 @app.route("/comports")
 def comports():
-    return serial_connection.available_comports()
+    try:
+        with serial_lock():
+            comports = serial_connection.available_comports()
+
+        if comports:
+            print(str(comports))
+            return jsonify(comports), 200
+        else:
+            return Response("No ports present.", 204)
+    except Exception as e:
+        return Response(str(e), 500)
+    
+@app.route("/comports/active")
+def active_comports():
+    port = ""
+    try:
+        with serial_lock():
+            port = serial_connection.get_port_name()
+
+        if not port:
+            return Response("No connection present.", 204)
+        else:
+            return Response(port, 200)
+    except Exception as e:
+        return Response(str(e), 500)
         
 @app.route("/connect", methods=["POST"])
 def connect():
