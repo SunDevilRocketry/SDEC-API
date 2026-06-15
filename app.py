@@ -29,9 +29,11 @@ CORS(app)
 # Globals for polling dashboard dump
 stop_event = threading.Event()
 telemetry_obj = Telemetry()
-dashboard_dump_thread = threading.Thread(target=poll_dashboard_dump, 
-                                         args=(serial_connection, stop_event, telemetry_obj), 
-                                         daemon=True)
+dashboard_dump_thread = threading.Thread(
+    target=poll_dashboard_dump,
+    args=(serial_connection, stop_event, telemetry_obj),
+    daemon=True
+)
 
 @app.route("/ping")
 def ping():
@@ -40,9 +42,9 @@ def ping():
         data = serial_connection.read()
 
         if data == b"\x05" or data == b'\x10': #should not hardcode
-            return "Ping response received"
+            return Response("Ping response received", status=200)
         else:
-            return "Ping failed"
+            return Response("Ping failed", status=400)
         
 @app.route("/comports")
 def comports():
@@ -73,30 +75,44 @@ def active_comports():
         
 @app.route("/connect", methods=["POST"])
 def connect():
+    # Set up handling for request
+    connected = False
     data = request.get_json(silent=True)
-    if not data: return "Missing POST JSON data"
+    if not data: return Response("Missing POST JSON data", status=400)
 
     name = data.get("comport")
     timeout = data.get("timeout", 5)
 
-    if not name: return "Missing 'comport' field"
+    if not name: return Response("Missing 'comport' field", status=400)
 
     try:
         timeout = int(timeout)
     except (TypeError, ValueError):
-        return "Invalid timeout value"
+        return Response("Invalid timeout value", status=400)
     
+    # Initialize a new connection if one does not exist
     try:
-        serial_connection.init_comport(name=name, baudrate=921600, timeout=timeout)
+        with serial_lock():
+            # This check can cause a race condition. It needs to be in the lock.
+            if serial_connection.target is not None:
+                connected = True
+            else:
+                serial_connection.init_comport(name=name, baudrate=921600, timeout=timeout)
 
-        if not serial_connection.open_comport(): return "Failed to open comport"
+                if not serial_connection.open_comport(): return Response("Failed to open comport", status=400)
 
-        # send connect opcode
-        serial_connection.connect()
+                # send connect opcode
+                serial_connection.connect()
 
-        if( serial_connection.target is None ):
-            return Response("Serial connection failed.", status=400)
-
+                if( serial_connection.target is None ):
+                    return Response("Serial connection failed.", status=400)
+                else:
+                    connected = True
+    except SerialException as e:
+        return Response("Serial connection error", status=400)
+    
+    # Return connection status
+    if connected and serial_connection.target is not None:
         return jsonify({
             "controller": {
                 "firmware": serial_connection.target.firmware.name,
@@ -104,16 +120,15 @@ def connect():
             },
             "status": "connected"
         })
-    
-    except SerialException as e:
-        return Response("Serial connection error", status=400)
+    else: # Shouldn't get here -- protective case
+        return Response("Serial connection failed (server-side error).", status=500)
     
 @app.route("/disconnect")
 def disconnect():
-    if not serial_connection.close_comport(): return "Failed to close comport"
-    return "Disconnected"
+    with serial_lock():
+        if not serial_connection.close_comport(): return Response("Failed to close comport", status=400)
+        return Response("Disconnected", status=200)
 
-# Stub, will be implemented for SDEC v2.1.0
 @app.route("/wireless-stats")
 def wireless_stats():
     if serial_connection.target is None:
@@ -125,27 +140,39 @@ def wireless_stats():
     
 @app.route("/dashboard-dump", methods=["GET", "POST"])
 def dashboard_dump():
+    global dashboard_dump_thread
     if request.method == "GET":
         return jsonify(telemetry_obj.get_latest_dashboard_dump())
     
     elif request.method == "POST":
         data = request.get_json(silent=True)
-        if not data: return "Missing POST JSON data"
+        if not data: return Response("Missing POST JSON data", status=400)
 
         start = data.get("start")
         stop = data.get("stop")
 
-        if bool(start) == bool(stop): return "Only start or stop can be set"
+        if bool(start) == bool(stop): return Response("Only start XOR stop can be set", status=400)
 
         if start:
-            stop_event.clear()
-            dashboard_dump_thread.start()
-            return "dashboard-dump poll started"
+            if dashboard_dump_thread.is_alive(): # Protective case
+                return Response("Polling was already running", status=200)
+            else:
+                stop_event.clear()
+                dashboard_dump_thread = threading.Thread(
+                    target=poll_dashboard_dump,
+                    args=(serial_connection, stop_event, telemetry_obj),
+                    daemon=True
+                )
+                dashboard_dump_thread.start()
+                return Response("Dashboard-dump poll started", status=200)
         elif stop:
-            stop_event.set()
-            return "dashboard-dump poll stopped"
+            if not dashboard_dump_thread.is_alive(): # Protective case
+                return Response("Polling was already stopped", status=200)
+            else:
+                stop_event.set()
+                return Response("Dashboard-dump poll stopped", status=200)
     
-    return "Invalid Method"
+    return Response("Invalid condition", status=400)
     
 @app.route("/sensor-dump")
 def sensor_dump():
