@@ -53,6 +53,12 @@ def comports():
             comports = serial_connection.available_comports()
 
         if comports:
+            # If there's an existing connection, 
+            # prune the other comports from the 
+            # list since the API only supports one at a time
+            port = serial_connection.get_port_name()
+            if port:
+                comports = { port: comports[port] }
             return jsonify(comports), 200
         else:
             return Response("No ports present.", 204)
@@ -97,6 +103,7 @@ def connect():
             if serial_connection.target is not None:
                 connected = True
             else:
+                # Initialize and connect in this block
                 serial_connection.init_comport(name=name, baudrate=921600, timeout=timeout)
 
                 if not serial_connection.open_comport(): return Response("Failed to open comport", status=400)
@@ -113,6 +120,10 @@ def connect():
     
     # Return connection status
     if connected and serial_connection.target is not None:
+        # Robustness: Check if the requested port is not the open one
+        if serial_connection.get_port_name() != name:
+            return Response("Another connection is already open", 400)
+        
         return jsonify({
             "controller": {
                 "firmware": serial_connection.target.firmware.name,
