@@ -6,7 +6,7 @@ import threading
 
 from flask import Flask, request, Response, jsonify
 from flask_cors import CORS
-from hardware import serial_connection, sensor_sentry, serial_lock, firmware # Objects from hardware.py
+from hardware import serial_connection, sensor_sentry, serial_lock, background_lifecycle_lock, firmware # Objects from hardware.py
 from serial import SerialException
 from threads import poll_dashboard_dump
 from typing import List, Dict
@@ -164,24 +164,25 @@ def dashboard_dump():
 
         if bool(start) == bool(stop): return Response("Only start XOR stop can be set", status=400)
 
-        if start:
-            if dashboard_dump_thread.is_alive(): # Protective case
-                return Response("Polling was already running", status=200)
-            else:
-                stop_event.clear()
-                dashboard_dump_thread = threading.Thread(
-                    target=poll_dashboard_dump,
-                    args=(serial_connection, stop_event, telemetry_obj),
-                    daemon=True
-                )
-                dashboard_dump_thread.start()
-                return Response("Dashboard-dump poll started", status=200)
-        elif stop:
-            if not dashboard_dump_thread.is_alive(): # Protective case
-                return Response("Polling was already stopped", status=200)
-            else:
-                stop_event.set()
-                return Response("Dashboard-dump poll stopped", status=200)
+        with background_lifecycle_lock():
+            if start:
+                if dashboard_dump_thread.is_alive(): # Protective case
+                    return Response("Polling was already running", status=200)
+                else:
+                    stop_event.clear()
+                    dashboard_dump_thread = threading.Thread(
+                        target=poll_dashboard_dump,
+                        args=(serial_connection, stop_event, telemetry_obj),
+                        daemon=True
+                    )
+                    dashboard_dump_thread.start()
+                    return Response("Dashboard-dump poll started", status=200)
+            elif stop:
+                if not dashboard_dump_thread.is_alive(): # Protective case
+                    return Response("Polling was already stopped", status=200)
+                else:
+                    stop_event.set()
+                    return Response("Dashboard-dump poll stopped", status=200)
     
     return Response("Invalid condition", status=400)
     

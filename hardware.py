@@ -14,6 +14,7 @@ from SDECv2 import create_sensors
 
 # Serial connection lock
 _serial_lock = threading.Lock()
+_background_lifecycle_lock = threading.Lock()
 
 # APPA Firmware
 firmware = Firmware(
@@ -33,3 +34,6 @@ serial_connection = SerialObj()
 
 def serial_lock():
     return _serial_lock
+
+def background_lifecycle_lock():
+    return _background_lifecycle_lock
