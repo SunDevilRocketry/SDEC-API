@@ -3,6 +3,7 @@
 
 import atexit
 import threading
+import json
 
 from flask import Flask, request, Response, jsonify
 from flask_cors import CORS
@@ -19,7 +20,7 @@ from SDECv2 import SerialObj
 # Sensor
 from SDECv2 import SensorSentry
 # Parser
-from SDECv2 import Telemetry
+from SDECv2 import Telemetry, Parser, create_configs
 # Sensor utility
 from SDECv2 import create_sensors
 
@@ -218,6 +219,47 @@ def sensor_poll():
                     yield f"{sensor.name}: {val:.2f} {sensor.unit}"
 
     return Response(do_poll(), mimetype="text/plain")
+
+@app.route("/preset", methods=["GET", "POST"])
+def preset():
+    if serial_connection.target is None:
+        return Response("No device connected!", 400)
+    elif serial_connection.target.controller.id != b"\x05": # Check if FC
+        return Response("The device is not a flight computer!", 400)
+
+    try:
+        if request.method == "GET": # DOWNLOAD
+            with serial_lock():
+                appa_preset_config = create_configs.appa_preset_config()
+                appa_parser = Parser(
+                    preset_config=appa_preset_config,
+                    preset_data=None
+                )
+                appa_parser.download_preset(serial_connection, path="SDECv2/a_output/temp_download.json")
+                with open("SDECv2/a_output/temp_download.json", "r") as f:
+                    downloaded_preset = json.load(f)
+                return Response(json.dumps(downloaded_preset, sort_keys=False), 200, mimetype="application/json")
+        
+        elif request.method == "POST": # UPLOAD
+            content = json.loads(request.data.decode("utf-8"))
+            if not content:
+                return Response("You must POST a json.", 400)
+            
+            with serial_lock():
+                
+                appa_preset_config = create_configs.appa_preset_config()
+                appa_parser = Parser(
+                    preset_config=appa_preset_config,
+                    preset_data=None
+                )
+                with open("SDECv2/a_input/temp_upload.json", "w") as f:
+                    json.dump(content, f)
+                appa_parser.upload_preset(serial_connection, path="SDECv2/a_input/temp_upload.json")
+
+                return Response("Successful upload!", 200)
+
+    except Exception as e:
+        return Response(str(e), 500)
 
 @app.route("/")
 def default():
