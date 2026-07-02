@@ -186,6 +186,24 @@ def dashboard_dump():
                     return Response("Dashboard-dump poll stopped", status=200)
     
     return Response("Invalid condition", status=400)
+
+@app.route("/liquids-data")
+def liquids_data():
+    """
+    [GET] /liquids-data
+
+    Returns a json with the most recent on-board liquids sensor readings.
+
+    CURRENTLY STUBBED
+    """
+    stubbed_data = {
+        "fuel_tank_pres": 101300, # Pa
+        "lox_tank_pres":  101300, # Pa
+        "chamber_pres":   101300, # Pa
+        "lox_inlet_temp": 25      # C
+    }
+
+    return(jsonify(stubbed_data))
     
 @app.route("/sensor-dump")
 def sensor_dump():
