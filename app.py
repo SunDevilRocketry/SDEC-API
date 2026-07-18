@@ -5,11 +5,12 @@ import atexit
 import threading
 import json
 
-from flask import Flask, request, Response, jsonify
+from flask import Flask, request, Response, jsonify, stream_with_context
 from flask_cors import CORS
 from hardware import serial_connection, sensor_sentry, serial_lock, background_lifecycle_lock, firmware # Objects from hardware.py
 from serial import SerialException
-from threads import poll_dashboard_dump
+from stream import Stream
+from threads import poll_dashboard_dump, sse_stream_callback
 from typing import List, Dict
 from util import make_safe_number
 
@@ -29,7 +30,9 @@ CORS(app)
 
 # Globals for polling dashboard dump
 stop_event = threading.Event()
+stream_obj = Stream()
 telemetry_obj = Telemetry()
+telemetry_obj.register_rx_callback(stream_obj.sse_put_callback)
 dashboard_dump_thread = threading.Thread(
     target=poll_dashboard_dump,
     args=(serial_connection, stop_event, telemetry_obj),
@@ -149,6 +152,31 @@ def wireless_stats():
         return telemetry_obj.get_latest_wireless_stats()
     else:
         return Response("No wireless target available.", status=204)
+    
+@app.route("/stream", methods=["GET"])
+def stream():
+    """
+    Subscribes to a server-sent event stream that is populated by all 
+    incoming messages.
+
+    Works for both the serial (USB) and over-the-air (LoRa) paths.
+
+    Integration Concerns: 
+        SDEC-API <-> SDEC - App initialization needs to provide a 
+        message_received callback to the telemetry object. SDEC needs
+        to invoke this callback upon receiving a new message. Null
+        or uninitialized callbacks must be handled.
+
+        SDEC-API <-> Client - Dashboard Dump must be initialized with
+        a POST request prior to subscribing to the stream, else no events
+        will be sent. The version number shall be incremented every time
+        an **existing** message type is changed. New message types do
+        not require upversioning.
+    """
+    return Response(
+        stream_with_context(stream_obj.sse_broadcast_callback),
+        mimetype="text/event-stream"
+    )
     
 @app.route("/dashboard-dump", methods=["GET", "POST"])
 def dashboard_dump():
