@@ -10,7 +10,7 @@ from flask_cors import CORS
 from hardware import serial_connection, sensor_sentry, serial_lock, background_lifecycle_lock, firmware # Objects from hardware.py
 from serial import SerialException
 from stream import Stream
-from threads import poll_dashboard_dump, sse_stream_callback
+from threads import poll_dashboard_dump
 from typing import List, Dict
 from util import make_safe_number
 
@@ -174,7 +174,7 @@ def stream():
         not require upversioning.
     """
     return Response(
-        stream_with_context(stream_obj.sse_broadcast_callback),
+        stream_with_context(stream_obj.sse_broadcast_callback()),
         mimetype="text/event-stream"
     )
     

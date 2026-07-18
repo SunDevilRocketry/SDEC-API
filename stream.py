@@ -25,15 +25,17 @@ class Stream:
         Set up a message for all clients to broadcast.
         """
         with self.stream_mutex:
-            self.data = {
+            response = {
                 "origin": ORIGIN_STRING,
                 "version": STREAM_VERSION_STRING,
                 "timestamp": timestamp,
                 "messageType": messageType,
                 "payload": msg
             }
+            self.data = str("data: " + str(response) + "\n\n").encode("utf-8")
             self.sequence_number += 1
-        self.signal_broadcast_event() # Only signal the events after releasing the mutex
+        self.signal_broadcast_event.set() # Only signal the events after releasing the mutex
+        self.signal_broadcast_event.clear()
 
 
     def sse_broadcast_callback(self):
