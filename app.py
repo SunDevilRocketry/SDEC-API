@@ -175,7 +175,12 @@ def stream():
     """
     return Response(
         stream_with_context(stream_obj.sse_broadcast_callback()),
-        mimetype="text/event-stream"
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
     )
     
 @app.route("/dashboard-dump", methods=["GET", "POST"])
