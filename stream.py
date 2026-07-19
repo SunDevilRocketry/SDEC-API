@@ -45,7 +45,7 @@ class Stream:
         Yields messages for the client with this request open.
         """
         last_seq_num = 0 # scoped to this instance
-        last_time = 0
+        last_time = time.monotonic()
         
         # Send a message immediately on connect if one exists
         with self.stream_cond:
@@ -66,17 +66,20 @@ class Stream:
                     self.stream_cond.wait()
                 # delay the broadcast (yielding to other threads) if rate limiter
                 # indicates that messages are coming in too fast
-                curr_time = time.time()
-                if RATE_LIMITER_PERIOD + last_time < curr_time:
+                curr_time = time.monotonic()
+                if curr_time < RATE_LIMITER_PERIOD + last_time:
                     # Release the lock if we have to wait for the timeout,
                     # then reacquire once we're back on the target rate.
                     self.stream_cond.release()
-                    time.sleep( RATE_LIMITER_PERIOD + last_time - curr_time )
-                    self.stream_cond.acquire()
-                # end the broadcast entirely if the termination flag is
+                    try:
+                        time.sleep( RATE_LIMITER_PERIOD + last_time - curr_time )
+                    finally:
+                        self.stream_cond.acquire()
+                # end the broadcast entirely if the termination flag is set
                 if self.terminate:
                     break
                 last_seq_num = self.sequence_number
                 data_to_yield = self.data
+                last_time = time.monotonic()
             
             yield data_to_yield
