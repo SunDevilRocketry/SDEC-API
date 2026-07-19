@@ -3,6 +3,7 @@
 
 import threading
 import time
+import json
 
 from typing import Dict, Any
 from util import make_safe_number
@@ -10,6 +11,8 @@ from util import make_safe_number
 # CONSTANTS
 ORIGIN_STRING = "SDEC-API"
 STREAM_VERSION_STRING = "1.0"
+RATE_LIMITER_HZ = 30
+RATE_LIMITER_PERIOD = 1.0 / RATE_LIMITER_HZ
 
 
 class Stream:
@@ -23,6 +26,7 @@ class Stream:
         """
         Set up a message for all clients to broadcast.
         """
+
         with self.stream_cond:
             response = {
                 "origin": ORIGIN_STRING,
@@ -41,6 +45,7 @@ class Stream:
         Yields messages for the client with this request open.
         """
         last_seq_num = 0 # scoped to this instance
+        last_time = 0
         
         # Send a message immediately on connect if one exists
         with self.stream_cond:
@@ -59,6 +64,16 @@ class Stream:
                 # Wait for sequence_number to change to avoid spurious wakeups
                 while self.sequence_number == last_seq_num and not self.terminate:
                     self.stream_cond.wait()
+                # delay the broadcast (yielding to other threads) if rate limiter
+                # indicates that messages are coming in too fast
+                curr_time = time.time()
+                if RATE_LIMITER_PERIOD + last_time < curr_time:
+                    # Release the lock if we have to wait for the timeout,
+                    # then reacquire once we're back on the target rate.
+                    self.stream_cond.release()
+                    time.sleep( RATE_LIMITER_PERIOD + last_time - curr_time )
+                    self.stream_cond.acquire()
+                # end the broadcast entirely if the termination flag is
                 if self.terminate:
                     break
                 last_seq_num = self.sequence_number
